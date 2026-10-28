@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>iPhone GitHub Uploader</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{color-scheme:dark}
+body{margin:0;padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 24px);background:#0b1210;color:#e8f3ee;font:16px/1.45 -apple-system,BlinkMacSystemFont,sans-serif;max-width:600px;margin-inline:auto}
+h1{font-size:22px}label{display:block;margin-top:12px;font-size:13px;color:#8aa398}
+input{width:100%;padding:12px;border-radius:10px;border:1px solid #2a3a33;background:#101a16;color:#fff;font-size:16px;margin-top:4px}
+button{width:100%;margin-top:16px;padding:14px;border:0;border-radius:999px;background:linear-gradient(135deg,#34d399,#06b6d4);color:#04130d;font-weight:800;font-size:16px}
+button:disabled{opacity:.5}pre{background:#000;color:#9fe;padding:10px;border-radius:10px;font-size:12px;white-space:pre-wrap;max-height:260px;overflow:auto}
+.note{font-size:13px;color:#8aa398}
+</style></head><body>
+<h1>📲 Push the project to GitHub</h1>
+<p class="note">Pick the <b>.zip</b> you downloaded (no need to unzip). It is unpacked on your phone and every file is committed through the GitHub Contents API. The token is only sent to api.github.com.</p>
+<label>GitHub username<input id="u" autocapitalize="none" autocomplete="off"></label>
+<label>Repository (create it empty first, with a README so the branch exists)<input id="r" value="dubai-streets-guide" autocapitalize="none"></label>
+<label>Branch<input id="b" value="main" autocapitalize="none"></label>
+<label>Fine-grained token (Contents: Read and write, this repo only)<input id="t" type="password" autocomplete="off"></label>
+<label>Project .zip<input id="z" type="file" accept=".zip,application/zip"></label>
+<button id="go">Upload everything</button>
+<pre id="log"></pre>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="../api/github-pusher.js"></script>
+<script>
+const $ = (id) => document.getElementById(id), log = (m) => { $('log').textContent += m + '\n'; $('log').scrollTop = 1e9; };
+$('go').onclick = async () => {
+  $('log').textContent = ''; $('go').disabled = true;
+  try {
+    const f = $('z').files[0]; if (!f) throw new Error('Choose the .zip first.');
+    const zip = await JSZip.loadAsync(await f.arrayBuffer());
+    const names = Object.keys(zip.files).filter((n) => !zip.files[n].dir && !/(^|\/)__MACOSX\//.test(n) && !/\.DS_Store$/.test(n));
+    const root = names.every((n) => n.split('/')[0] === names[0].split('/')[0]) && names[0].includes('/') ? names[0].split('/')[0] + '/' : '';
+    const files = [];
+    for (const n of names) files.push({ path: n.slice(root.length), content: await zip.files[n].async('arraybuffer') });
+    log('Unpacked ' + files.length + ' files.');
+    await GitHubPusher.pushFiles({ user: $('u').value.trim(), repo: $('r').value.trim(), branch: $('b').value.trim() || 'main', token: $('t').value.trim() }, files, log);
+  } catch (e) { log('Error: ' + e.message); }
+  $('go').disabled = false;
+};
+</script></body></html>
