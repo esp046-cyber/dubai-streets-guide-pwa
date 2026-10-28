@@ -1,0 +1,28 @@
+{
+  "name": "Dubai Streets Guide PRO — Jebel Ali & Greater Dubai",
+  "short_name": "Dubai Streets",
+  "description": "Highway exits, left/right lane guidance, U-turns, fuel and JAFZA gates for Jebel Ali and Greater Dubai.",
+  "id": "./",
+  "start_url": "./index.html?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1210",
+  "theme_color": "#0b1210",
+  "lang": "en",
+  "categories": ["navigation", "travel", "utilities"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    { "src": "screenshots/mobile-map.png", "sizes": "1080x1920", "type": "image/png", "form_factor": "narrow", "label": "Map with RTA gantry HUD and filters" },
+    { "src": "screenshots/lane-guide.png", "sizes": "1080x1920", "type": "image/png", "form_factor": "narrow", "label": "Left/Right lane guide" }
+  ],
+  "shortcuts": [
+    { "name": "Find Gas", "short_name": "Gas", "url": "./index.html?filter=gas", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Nearest U-Turn", "short_name": "U-Turn", "url": "./index.html?filter=uturn", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "JAFZA Gates", "short_name": "JAFZA", "url": "./index.html?filter=jafza", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] }
+  ]
+}

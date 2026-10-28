@@ -1,0 +1,13 @@
+{
+  "name": "dubai-streets-guide-pwa",
+  "version": "1.0.0",
+  "description": "Jebel Ali & Greater Dubai streets guide PWA. Static site, no build step required.",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "node backend/mock-server.js",
+    "serve": "npx --yes serve -l 8080 .",
+    "test": "node tests/app.test.js"
+  },
+  "engines": { "node": ">=18" }
+}

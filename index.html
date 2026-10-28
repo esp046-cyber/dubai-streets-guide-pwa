@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="night">
+<head>
+<meta charset="utf-8">
+<title>Dubai Streets Guide PWA — Jebel Ali &amp; Greater Dubai Navigation</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="description" content="Jebel Ali and Greater Dubai road guide: highway exits, left/right lane guidance, U-turn slots, fuel stations, JAFZA gates and Salik gates. Works offline.">
+<meta name="theme-color" content="#0b1210">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dubai Streets">
+<meta name="msapplication-config" content="browserconfig.xml">
+<meta property="og:title" content="Dubai Streets Guide PWA — Jebel Ali &amp; Greater Dubai Navigation">
+<meta property="og:description" content="Lane guidance, exits, U-turns, fuel and JAFZA gates for Jebel Ali and Greater Dubai.">
+<meta property="og:image" content="https://YOUR-USERNAME.github.io/dubai-streets-guide/assets/og-image.png">
+<meta property="og:url" content="https://YOUR-USERNAME.github.io/dubai-streets-guide/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Dubai Streets Guide">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Dubai Streets Guide PWA">
+<meta name="twitter:description" content="Lane guidance, exits, U-turns, fuel and JAFZA gates for Jebel Ali and Greater Dubai.">
+<meta name="twitter:image" content="https://YOUR-USERNAME.github.io/dubai-streets-guide/assets/og-image.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- Top RTA gantry HUD -->
+  <header id="hud-top">
+    <div id="gantry" class="gantry green" aria-live="polite">
+      <div class="g-exit"><small>EXIT</small><b id="g-exit-no">—</b></div>
+      <div class="g-names">
+        <div id="g-en">Tap any marker</div>
+        <div id="g-ar" dir="rtl">اختر علامة على الخريطة</div>
+      </div>
+      <div class="g-right">
+        <div id="g-arrows" class="g-arrows">↑ ↑ ↑ ↑</div>
+        <div id="g-dist">—</div>
+      </div>
+      <div id="g-keep" class="g-keep hidden">KEEP RIGHT</div>
+    </div>
+    <div id="alert-bar" class="alert-bar hidden"></div>
+  </header>
+
+  <!-- Filter pills -->
+  <nav id="pills" aria-label="Map filters">
+    <button class="pill active" data-f="all">All</button>
+    <button class="pill" data-f="gas">⛽ Gas Stations</button>
+    <button class="pill" data-f="uturn">🔄 U-Turn Slots</button>
+    <button class="pill" data-f="hwy">🛣️ Highways &amp; Exits</button>
+    <button class="pill" data-f="lane">⬅️➡️ Left/Right Guide</button>
+    <button class="pill" data-f="jafza">🏗️ Jebel Ali / JAFZA</button>
+    <button class="pill" data-f="salik">🚧 Salik Gates</button>
+  </nav>
+
+  <div id="map-wrap"><div id="map"></div></div>
+
+  <!-- Right control stack -->
+  <aside id="stack">
+    <button id="b-locate" class="fab" title="Locate me (GPS)" aria-label="Locate me">◎</button>
+    <button id="b-north" class="fab" title="North-up / re-centre" aria-label="Re-centre"><span class="compass">N</span></button>
+    <button id="b-tilt" class="fab" title="2D / 3D tilt" aria-label="Tilt">3D</button>
+    <button id="b-theme" class="fab" title="Night / Day" aria-label="Theme">☾</button>
+    <button id="b-voice" class="fab on" title="Voice guidance" aria-label="Voice">🔊</button>
+    <button id="b-route" class="fab" title="Route simulator" aria-label="Route simulator">➤</button>
+    <button id="b-deploy" class="fab" title="Deploy to GitHub from iPhone" aria-label="Deploy">📲</button>
+  </aside>
+
+  <!-- Dual-ring speed + radar widget -->
+  <div id="speedo" aria-label="Speed and posted limit">
+    <svg viewBox="0 0 120 120" width="112" height="112">
+      <circle cx="60" cy="60" r="55" class="ring-radar"/>
+      <circle cx="60" cy="60" r="42" class="ring-limit"/>
+      <text x="60" y="56" class="sp-limit" id="sp-limit">80</text>
+      <text x="60" y="72" class="sp-cur" id="sp-cur">0</text>
+      <text x="60" y="86" class="sp-unit">km/h</text>
+    </svg>
+    <div class="sp-radar">Radar ≈ <b id="sp-radar">100</b></div>
+  </div>
+
+  <!-- Junction view drawer (slides down from top) -->
+  <section id="junction" class="hidden" aria-live="polite">
+    <button id="j-close" class="x" aria-label="Close junction view">✕</button>
+    <div id="j-title"></div>
+    <div id="j-svg"></div>
+    <div id="j-note"></div>
+  </section>
+
+  <!-- Draggable bottom sheet -->
+  <section id="sheet" data-snap="peek">
+    <div id="handle" role="slider" aria-label="Drag sheet"><i></i></div>
+    <div class="s-scroll">
+      <div class="search">
+        <input id="q" type="search" placeholder="Search exit, street, gate, station…" autocomplete="off" inputmode="search">
+        <ul id="suggest" class="hidden"></ul>
+      </div>
+
+      <div id="truck-banner" class="truck hidden"></div>
+
+      <div class="blk">
+        <h3>Lane guide</h3>
+        <div id="lane-dest" class="chips"></div>
+        <div id="lane-strip" class="lanes"><div class="hint">Select an exit or Left/Right split to see which lane to hold.</div></div>
+      </div>
+
+      <div class="blk">
+        <h3>Upcoming on this highway</h3>
+        <div id="ribbon" class="ribbon"><div class="hint">Select a point on E11, E311, E611, E77, D57 or D59.</div></div>
+      </div>
+
+      <div id="fuel-bar" class="blk hidden">
+        <h3>UAE fuel prices <small id="fuel-asof"></small></h3>
+        <div id="fuel-prices" class="prices"></div>
+        <div id="fuel-toggles" class="chips">
+          <button data-t="ev">⚡ EV Green Charger</button>
+          <button data-t="truck">🚛 Heavy Truck Diesel</button>
+          <button data-t="h24">🏪 24/7 ZOOM Store</button>
+          <button data-t="prayer">🕌 Prayer Room</button>
+        </div>
+      </div>
+
+      <div id="card" class="card hidden"></div>
+      <div id="list" class="list"></div>
+      <p class="disclaimer">Positions, lanes and exit numbers are a driving aid, not an official source. Always follow road signs and RTA instructions. See docs/JEBEL_ALI_ROAD_MANUAL.md.</p>
+    </div>
+  </section>
+
+  <!-- Route simulator modal -->
+  <div id="m-route" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="m-box">
+      <button class="x" data-close>✕</button>
+      <h2>Turn-by-turn simulator</h2>
+      <select id="route-pick"></select>
+      <ol id="route-steps"></ol>
+      <div class="row">
+        <button id="route-go" class="btn">▶ Start</button>
+        <button id="route-stop" class="btn ghost">■ Stop</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GitHub deploy modal -->
+  <div id="m-deploy" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="m-box">
+      <button class="x" data-close>✕</button>
+      <h2>📲 Deploy to GitHub from iPhone</h2>
+      <details open>
+        <summary>Option 1 — Unzip in Files, upload in Safari</summary>
+        <ol class="small">
+          <li>Files app → tap the .zip once to extract it.</li>
+          <li>github.com → New repository → <i>Add file → Upload files</i>.</li>
+          <li>Tap <i>Choose your files</i> → Browse → select everything inside the extracted folder (for sub-folders, repeat per folder, or use Option 2).</li>
+          <li>Commit, then Settings → Pages → Branch <code>main</code> / root → Save.</li>
+        </ol>
+      </details>
+      <details open>
+        <summary>Option 2 — Direct pusher (GitHub Contents API)</summary>
+        <p class="small">Creates a fine-grained token at github.com/settings/tokens with <b>Contents: Read and write</b> on your repo only. The token stays in this browser tab and is sent only to api.github.com.</p>
+        <label>Username<input id="gh-user" autocomplete="off" autocapitalize="none"></label>
+        <label>Repository<input id="gh-repo" value="dubai-streets-guide" autocapitalize="none"></label>
+        <label>Branch<input id="gh-branch" value="main" autocapitalize="none"></label>
+        <label>Personal access token<input id="gh-token" type="password" autocomplete="off"></label>
+        <button id="gh-push" class="btn">Push all project files</button>
+        <pre id="gh-log" class="log"></pre>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="config/app.config.js"></script>
+<script src="api/roads-api.js"></script>
+<script src="api/github-pusher.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
