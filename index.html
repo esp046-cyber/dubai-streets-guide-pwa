@@ -16,14 +16,14 @@
 <meta name="msapplication-config" content="browserconfig.xml">
 <meta property="og:title" content="Dubai Streets Guide PWA — Jebel Ali &amp; Greater Dubai Navigation">
 <meta property="og:description" content="Lane guidance, exits, U-turns, fuel and JAFZA gates for Jebel Ali and Greater Dubai.">
-<meta property="og:image" content="https://esp046-cyber.github.io/dubai-streets-guide-pwa/assets/og-image.png">
+<meta property="og:image" content="https://esp046-cyber.github.io/dubai-streets-guide-pwa/og-image.png">
 <meta property="og:url" content="https://esp046-cyber.github.io/dubai-streets-guide-pwa/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Dubai Streets Guide">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Dubai Streets Guide PWA">
 <meta name="twitter:description" content="Lane guidance, exits, U-turns, fuel and JAFZA gates for Jebel Ali and Greater Dubai.">
-<meta name="twitter:image" content="https://esp046-cyber.github.io/dubai-streets-guide-pwa/assets/og-image.png">
+<meta name="twitter:image" content="https://esp046-cyber.github.io/dubai-streets-guide-pwa/og-image.png">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="./style.css">
 </head>
@@ -100,18 +100,12 @@
         <ul id="suggest" class="hidden"></ul>
       </div>
 
+      <div id="ribbon-wrap" aria-label="Upcoming on this highway">
+        <div id="ribbon" class="ribbon"><div class="hint">Loading highway stops…</div></div>
+      </div>
+
       <div id="truck-banner" class="truck hidden"></div>
-
-      <div class="blk">
-        <h3>Lane guide</h3>
-        <div id="lane-dest" class="chips"></div>
-        <div id="lane-strip" class="lanes"><div class="hint">Select an exit or Left/Right split to see which lane to hold.</div></div>
-      </div>
-
-      <div class="blk">
-        <h3>Upcoming on this highway</h3>
-        <div id="ribbon" class="ribbon"><div class="hint">Select a point on E11, E311, E611, E77, D57 or D59.</div></div>
-      </div>
+      <div id="card" class="card hidden"></div>
 
       <div id="fuel-bar" class="blk hidden">
         <h3>UAE fuel prices <small id="fuel-asof"></small></h3>
@@ -124,8 +118,9 @@
         </div>
       </div>
 
-      <div id="card" class="card hidden"></div>
-      <div id="list" class="list"></div>
+      <div id="turns-blk" class="blk hidden"><h3>Turn list</h3><ol id="turns" class="turns"></ol></div>
+      <div class="blk"><h3>Nearby</h3><div id="list" class="list"></div></div>
+      <div class="blk"><h3>Salik tariff <small>Dubai time</small></h3><table id="salik-tbl" class="tbl"></table></div>
       <p class="disclaimer">Positions, lanes and exit numbers are a driving aid, not an official source. Always follow road signs and RTA instructions. See docs/JEBEL_ALI_ROAD_MANUAL.md.</p>
     </div>
   </section>
@@ -172,6 +167,23 @@
   </div>
 </div>
 
+<script>
+/* Force-retire any older service worker / cache before the app starts. */
+(function () {
+  var TAG = 'v=3', CACHE = 'dubai-streets-v3';
+  try {
+    if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(function (rs) {
+      rs.forEach(function (r) {
+        var w = r.active || r.waiting || r.installing, u = (w && w.scriptURL) || '';
+        if (u.indexOf(TAG) < 0) r.unregister();
+      });
+    }).catch(function () {});
+    if (window.caches) caches.keys().then(function (ks) {
+      ks.forEach(function (k) { if (k !== CACHE) caches.delete(k); });
+    }).catch(function () {});
+  } catch (e) {}
+})();
+</script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="./script.js"></script>
 </body>

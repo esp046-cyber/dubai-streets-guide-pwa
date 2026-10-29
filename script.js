@@ -9,9 +9,11 @@
     version: '1.0.0',
     center: [25.0069, 55.0867], // Jebel Ali
     zoom: { default: 12, city: 11, street: 15, detail: 17 },
+    // Keyless CARTO Voyager raster tiles (no API key, no watermark). Night mode inverts them with a CSS filter (.tiles-night).
     tiles: {
-      day: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap contributors' },
-      night: { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attr: '&copy; OpenStreetMap, &copy; CARTO' }
+      day:   { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', attr: '&copy; OpenStreetMap contributors &copy; CARTO' },
+      night: { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', attr: '&copy; OpenStreetMap contributors &copy; CARTO', cls: 'tiles-night' },
+      fallback: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap contributors' }
     },
     // Dubai radar: widely reported ~20 km/h flash tolerance. Informational only: the posted limit is the law.
     radarBuffer: { dubai: 20, abuDhabi: 0, note: 'Informational only. The posted limit is the legal limit.' },
@@ -40,7 +42,7 @@
     gantry: { green: '#006B3F', blue: '#00529B' },
     // Files the in-app GitHub pusher uploads (paths relative to the site root)
     projectFiles: [
-      'index.html', 'style.css', 'dubai-roads.json', 'script.js', 'manifest.json', 'service-worker.js', 'offline.html',
+      'index.html', 'style.css', 'dubai-roads.json', 'og-image.png', 'screenshot-map.png', 'screenshot-lanes.png', 'script.js', 'manifest.json', 'service-worker.js', 'offline.html',
       'favicon.ico', 'icon-192.png', 'icon-512.png', 'README.md', '.gitignore', 'package.json',
       '.env.example', 'LICENSE', 'robots.txt', 'sitemap.xml', 'browserconfig.xml',
       'assets/og-image.png', 'assets/gas.svg', 'assets/uturn.svg', 'assets/highway.svg', 'assets/lane-left.svg', 'assets/lane-right.svg',
@@ -253,17 +255,29 @@ window.BUILTIN_DUBAI_DB = {"meta":{"name":"Dubai Streets Guide road database","v
     return window.BUILTIN_DUBAI_DB;
   }
 
+  function ready(fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); }
+  function fatal(msg) {
+    if ($('#fatal')) return;
+    const d = document.createElement('div'); d.id = 'fatal'; d.setAttribute('role', 'alert');
+    d.innerHTML = '<div>' + msg + '</div><button type="button">Retry</button>';
+    d.querySelector('button').onclick = () => location.reload();
+    ($('#app') || document.body).appendChild(d);
+  }
+  function fixSize() { if (S.map) S.map.invalidateSize(); }
+
   async function boot() {
-    // Map first, so a data problem can never leave a black screen.
-    try { initMap(); } catch (e) { $('#g-en').textContent = 'Map library failed to load — check your connection'; return; }
-    setTimeout(() => S.map.invalidateSize(), 300); setTimeout(() => S.map.invalidateSize(), 1200);
-    window.addEventListener('resize', () => S.map.invalidateSize()); window.addEventListener('orientationchange', () => setTimeout(() => S.map.invalidateSize(), 300));
+    if (!window.L) { fatal('Map library could not be loaded. The external map dependencies (unpkg.com / map tiles) were unreachable. Check your connection and retry.'); return; }
+    try { initMap(); } catch (e) { fatal('The map could not start: ' + esc(e.message)); return; }
+    // iOS dynamic viewports settle late: re-measure the container several times.
+    setTimeout(fixSize, 100); setTimeout(fixSize, 500); setTimeout(fixSize, 1500);
+    window.addEventListener('resize', fixSize);
+    window.addEventListener('orientationchange', () => setTimeout(fixSize, 300));
     S.api = API.create(await loadDB());
-    drawRoads(); drawZones(); drawMarkers(); bindUI(); renderList(); applyTheme(); renderFuel();
-    setInterval(refreshSalik, 60000);
+    drawRoads(); drawZones(); drawMarkers(); bindUI(); renderList(); applyTheme(); renderFuel(); renderRibbon(); renderSalikTable();
+    setInterval(() => { refreshSalik(); renderSalikTable(); }, 60000);
     const qf = new URLSearchParams(location.search).get('filter');
     if (qf) { const p = document.querySelector('#pills .pill[data-f="' + qf + '"]'); if (p) p.click(); }
-    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./service-worker.js?v=3').catch(() => {});
   }
 
   /* ---------- map ---------- */
@@ -273,15 +287,18 @@ window.BUILTIN_DUBAI_DB = {"meta":{"name":"Dubai Streets Guide road database","v
     S.map.on('click', () => { if (S.sheetSnap !== 'peek') snap('peek'); });
     S.map.on('zoomend', () => { if (S.filter === 'all') drawMarkers(); });
   }
+  function tileLayer(def, subs) {
+    return L.tileLayer(def.url, { attribution: def.attr, subdomains: subs, maxZoom: 19, className: def.cls || '' });
+  }
   function setTiles() {
     if (S.tile) S.map.removeLayer(S.tile);
     const t = C.tiles[S.theme === 'night' ? 'night' : 'day'];
     let errs = 0;
-    S.tile = L.tileLayer(t.url, { attribution: t.attr, subdomains: 'abcd', maxZoom: 19 }).addTo(S.map);
+    S.tile = tileLayer(t, 'abcd').addTo(S.map);
     S.tile.on('tileerror', () => {
-      if (++errs === 8 && S.theme === 'night') { // dark tiles blocked: fall back to OpenStreetMap
+      if (++errs === 10) { // CARTO unreachable: fall back to standard OpenStreetMap tiles (same night filter)
         S.map.removeLayer(S.tile);
-        S.tile = L.tileLayer(C.tiles.day.url, { attribution: C.tiles.day.attr, subdomains: 'abc', maxZoom: 19 }).addTo(S.map);
+        S.tile = tileLayer({ url: C.tiles.fallback.url, attr: C.tiles.fallback.attr, cls: t.cls }, 'abc').addTo(S.map);
       }
     });
   }
@@ -363,13 +380,31 @@ window.BUILTIN_DUBAI_DB = {"meta":{"name":"Dubai Streets Guide road database","v
   }
 
   /* ---------- selection / cards ---------- */
+  const NAV = [
+    ['Google Maps', '#4285f4', (ll) => 'https://www.google.com/maps/dir/?api=1&destination=' + ll],
+    ['Waze', '#33ccff', (ll) => 'https://waze.com/ul?ll=' + ll + '&navigate=yes'],
+    ['Apple Maps', '#d1d5db', (ll) => 'https://maps.apple.com/?daddr=' + ll + '&dirflg=d'],
+    ['RTA Smart Drive', '#e11d48', () => 'https://www.rta.ae/wps/portal/rta/ae/home']
+  ];
   function navBar(it) {
     const ll = it.lat + ',' + it.lng;
-    return `<div class="navbar">
-      <a href="https://www.google.com/maps/dir/?api=1&destination=${ll}" target="_blank" rel="noopener">Google Maps</a>
-      <a class="waze" href="https://waze.com/ul?ll=${ll}&navigate=yes" target="_blank" rel="noopener">Waze</a>
-      <a class="apple" href="https://maps.apple.com/?daddr=${ll}&dirflg=d" target="_blank" rel="noopener">Apple Maps</a>
-      <a class="rta" href="https://www.rta.ae/wps/portal/rta/ae/home" target="_blank" rel="noopener">RTA Smart Drive</a></div>`;
+    return '<div class="navgrid">' + NAV.map((n) => `<a style="--c:${n[1]}" href="${n[2](ll)}" target="_blank" rel="noopener"><i></i>${n[0]}</a>`).join('') + '</div>';
+  }
+  const SVG = {
+    clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
+    bolt: '<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>',
+    truck: '<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="17" r="1.8"/><circle cx="17" cy="17" r="1.8"/>',
+    store: '<path d="M4 9l1-4h14l1 4M5 9v10h14V9M9 19v-6h6v6"/>',
+    drop: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
+    tyre: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',
+    mosque: '<path d="M5 20v-7a7 7 0 0 1 14 0v7M3 20h18M12 3v3"/>',
+    fuel: '<path d="M5 20V5h9v15M3 20h13M14 9h3l2 2v6a1.5 1.5 0 0 1-3 0v-3"/>'
+  };
+  const svgIcon = (k) => `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SVG[k]}</svg>`;
+  const AMEN = [['h24', '24/7', 'clock'], ['ev', 'EV Charger', 'bolt'], ['truck', 'Truck lane', 'truck'], ['zoom', 'ZOOM/Oasis', 'store'], ['wash', 'Car wash', 'drop'], ['air', 'Tyre air', 'tyre'], ['prayer', 'Prayer room', 'mosque'], ['diesel', 'Diesel', 'fuel']];
+  function shortName(it) {
+    return it.name.replace('Jebel Ali Industrial', 'Jebel Ali Ind.').replace(/^(ADNOC|ENOC|Emarat)\s*·\s*/i, '$1 ')
+      .replace('Dubai Investment Park', 'DIP').replace(/ (Northeast|Southwest)-bound/, '').replace(/ \(Exit \d+\)/, '').replace('Sheikh Zayed Rd', 'SZR');
   }
   function recoveryBox(it) {
     if (!it.recovery) return '';
@@ -385,16 +420,16 @@ window.BUILTIN_DUBAI_DB = {"meta":{"name":"Dubai Streets Guide road database","v
     if (it.limit) b.push(`<span class="badge warn">${it.limit} km/h</span>`);
     if (it.dir) b.push(`<span class="badge">${esc(it.dir)}</span>`);
     if (it.cat === 'uturn') b.push(`<span class="badge ${it.type === 'loop' ? 'ok' : 'warn'}">${{ loop: 'Free-flow loop', signal: 'Signalised', ra: 'Roundabout' }[it.type]}</span>`);
-    if (it.cat === 'gas') ['h24:24/7', 'ev:⚡ EV', 'truck:🚛 Truck lane', 'zoom:🏪 ZOOM/Oasis', 'wash:🚿 Car wash', 'air:🛞 Tyre air', 'prayer:🕌 Prayer room']
-      .forEach((p) => { const [k, l] = p.split(':'); if (it[k]) b.push(`<span class="badge ok">${l}</span>`); });
-    if (it.cat === 'gas') b.push(`<span class="badge">Super 98 · Special 95${it.diesel ? ' · Diesel' : ''}</span>`);
+    const amen = it.cat === 'gas' ? '<div class="amen">' + AMEN.filter((a) => it[a[0]]).map((a) => `<span class="am">${svgIcon(a[2])}${a[1]}</span>`).join('') + '</div>' : '';
     let extra = '';
     if (it.cat === 'salik') { const t = API.salikTariff(new Date()); extra = `<p><b>Now: ${t.label}</b> (Dubai time). Peak AED 6 · Off-peak AED 4 · Free 01:00–06:00.</p>`; }
-    return `<h2>${esc(it.name)}</h2><div class="ar" dir="rtl">${esc(it.ar || '')}</div>${b.join('')}
+    return `<h2>${esc(it.name)}</h2><div class="ar" dir="rtl">${esc(it.ar || '')}</div><div class="badges">${b.join('')}</div>${amen}
+      <div id="lane-box" class="lane-box"></div>
+      ${navBar(it)}
       ${it.tip ? `<p>${esc(it.tip)}</p>` : ''}${it.how ? `<p><b>Approach:</b> ${esc(it.how)}</p>` : ''}${extra}
       ${it.confidence && it.confidence !== 'ok' ? `<p class="hint">Position is ${esc(it.confidence)} — verify on site.</p>` : ''}
       ${recoveryBox(it)}
-      ${it.lanes ? '<button class="btn" id="btn-junction">Junction view</button>' : ''}${navBar(it)}`;
+      ${it.lanes ? '<button class="btn sm ghost" id="btn-junction">Open junction view</button>' : ''}`;
   }
 
   function select(id, fromMap) {
@@ -408,9 +443,8 @@ window.BUILTIN_DUBAI_DB = {"meta":{"name":"Dubai Streets Guide road database","v
     $$('[data-goto]', card).forEach((a) => a.onclick = (e) => { e.preventDefault(); select(a.dataset.goto); });
     renderLanes(); renderRibbon(); updateGantry(it); truckBanner(it);
     $('#fuel-bar').classList.toggle('hidden', S.filter !== 'gas');
-    snap(fromMap ? 'half' : 'half');
-    if (it.lanes) showJunction(true);
-    else $('#junction').classList.add('hidden');
+    $('#junction').classList.add('hidden');
+    snap('half'); $('.s-scroll').scrollTop = 0;
   }
 
   /* ---------- gantry HUD ---------- */
@@ -452,17 +486,25 @@ window.BUILTIN_DUBAI_DB = {"meta":{"name":"Dubai Streets Guide road database","v
     return a.length >= 3 && a[a.length - 1] - a[0] === a.length - 1 ? a[0] + '–' + a[a.length - 1] : a.join(' & ');
   }
 
-  /* ---------- lane strip ---------- */
+  /* ---------- lane visualizer ---------- */
   function renderLanes() {
-    const it = S.sel, strip = $('#lane-strip'), chips = $('#lane-dest');
-    if (!it || !it.lanes) { chips.innerHTML = ''; strip.innerHTML = '<div class="hint">No lane data for this point.</div>'; return; }
-    chips.innerHTML = it.lanes.dest.map((d, i) => `<button data-i="${i}" class="${i === S.destIdx ? 'active' : ''}">${esc(d.label)}</button>`).join('');
-    $$('button', chips).forEach((b) => b.onclick = () => { S.destIdx = +b.dataset.i; renderLanes(); updateGantry(it); if (!$('#junction').classList.contains('hidden')) showJunction(true); });
-    const ls = API.laneState(it.lanes, S.destIdx);
-    strip.innerHTML = ls.lanes.map((l) => `<div class="lane ${l.state}"><span class="n">${l.n}</span>${l.label}</div>`).join('');
-    strip.insertAdjacentHTML('afterend', '');
-    let note = $('#lane-note'); if (!note) { note = document.createElement('div'); note.id = 'lane-note'; note.className = 'lane-note'; strip.after(note); }
-    note.innerHTML = `<b>KEEP ${ls.keep}</b> — lane${ls.dest.hold.length > 1 ? 's' : ''} ${fmtLanes(ls.dest.hold)} (lane 1 is the far left). ${esc(ls.dest.note || '')}`;
+    const it = S.sel, box = $('#lane-box'); if (!box) return;
+    if (!it || !it.lanes) { box.innerHTML = ''; return; }
+    const ls = API.laneState(it.lanes, S.destIdx), hold = ls.dest.hold, held = new Set(hold), n = it.lanes.total;
+    const turn = it.lanes.side === 'left' ? '↰' : '↱';
+    const edge = it.lanes.side === 'left' ? Math.min.apply(null, hold) : Math.max.apply(null, hold);
+    const lanes = [];
+    for (let k = 1; k <= n; k++) {
+      const on = held.has(k), arrow = on && ls.dest.kind === 'exit' && k === edge ? turn : '↑';
+      lanes.push(`<div class="ln ${on ? 'go' : ''}" aria-label="Lane ${k}${on ? ' keep' : ''}"><em>${arrow}</em><small>Lane ${k}</small></div>`);
+    }
+    const chips = it.lanes.dest.length > 1 ? '<div class="chips" id="lane-dest">' + it.lanes.dest.map((d, i) => `<button data-i="${i}" class="${i === S.destIdx ? 'active' : ''}">${esc(d.label)}</button>`).join('') + '</div>' : '';
+    box.innerHTML = `<div class="lane-head"><h3>Lane guide</h3>${chips}</div><div class="lv">${lanes.join('')}</div>
+      <div class="lane-legend"><b>KEEP ${ls.keep}</b> · lane${hold.length > 1 ? 's' : ''} ${fmtLanes(hold)} of ${n}${ls.dest.note ? ' · ' + esc(ls.dest.note) : ''}</div>`;
+    $$('#lane-dest button', box).forEach((bt) => bt.onclick = () => {
+      S.destIdx = +bt.dataset.i; renderLanes(); updateGantry(it);
+      if (!$('#junction').classList.contains('hidden')) showJunction(true);
+    });
   }
 
   /* ---------- junction SVG ---------- */
@@ -504,17 +546,25 @@ window.BUILTIN_DUBAI_DB = {"meta":{"name":"Dubai Streets Guide road database","v
     if (auto !== true) snap('peek');
   }
 
-  /* ---------- ribbon ---------- */
+  /* ---------- upcoming-on-this-highway timeline ---------- */
   function renderRibbon() {
     const it = S.sel, el = $('#ribbon');
-    if (!it || !it.road) { el.innerHTML = '<div class="hint">This point is not on a mapped highway.</div>'; return; }
-    const items = S.api.all.filter((i) => i.road === it.road && ['exit', 'uturn', 'gas', 'gate', 'salik', 'split'].includes(i.cat)).sort((a, b) => a.km - b.km);
+    const road = it && it.road ? it.road : 'e11';
+    const items = S.api.all.filter((i) => i.road === road && i.km != null && ['exit', 'uturn', 'gas', 'gate', 'salik', 'split'].includes(i.cat)).sort((a, b) => a.km - b.km);
+    const ref = S.me || { lat: C.center[0], lng: C.center[1] };
+    const onRoad = it && it.road === road && it.km != null;
     el.innerHTML = items.map((i) => {
-      const d = Math.abs(i.km - it.km);
-      return `<div class="rb ${i.id === it.id ? 'cur' : ''}" data-id="${esc(i.id)}"><i>${ICON[i.cat]}</i><b>${i.exit ? 'Exit ' + esc(i.exit) + ' ' : ''}${esc(i.name).slice(0, 22)}</b><span>${i.id === it.id ? 'You are here' : (i.km > it.km ? '➔ ' : '⬅ ') + d.toFixed(1) + ' km'}</span></div>`;
-    }).join('');
+      const chip = onRoad ? (i.id === it.id ? 'You are here' : (i.km > it.km ? '➔ ' : '⬅ ') + Math.abs(i.km - it.km).toFixed(1) + ' km') : API.distanceKm(ref.lat, ref.lng, i.lat, i.lng).toFixed(1) + ' km';
+      return `<div class="rb ${it && i.id === it.id ? 'cur' : ''}" data-id="${esc(i.id)}"><div class="rb-ic">${ICON[i.cat]}</div><div class="rb-tx"><b>${i.exit ? 'Exit ' + esc(i.exit) + ' · ' : ''}${esc(shortName(i))}</b><span class="dchip">${chip}</span></div></div>`;
+    }).join('') || '<div class="hint">No mapped stops on this road.</div>';
     $$('.rb', el).forEach((n) => n.onclick = () => select(n.dataset.id));
-    const cur = $('.rb.cur', el); if (cur) el.scrollLeft = cur.offsetLeft - el.clientWidth / 2 + 60;
+    const cur = $('.rb.cur', el); if (cur) el.scrollLeft = Math.max(0, cur.offsetLeft - 12);
+  }
+
+  function renderSalikTable() {
+    const s = C.salik, now = API.salikTariff(new Date()).band;
+    const rows = [['peak', 'Peak · Mon–Sat 06–10 &amp; 16–20', 'AED ' + s.peak], ['offpeak', 'Off-peak · 10–16, 20–01 &amp; all day Sunday', 'AED ' + s.offPeak], ['free', 'Late night · every day 01–06', 'FREE']];
+    const t = $('#salik-tbl'); if (t) t.innerHTML = rows.map((r) => `<tr class="${r[0] === now ? 'now' : ''}"><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('');
   }
 
   /* ---------- fuel / list / search ---------- */
@@ -556,7 +606,7 @@ window.BUILTIN_DUBAI_DB = {"meta":{"name":"Dubai Streets Guide road database","v
   function bindSheet() {
     const sheet = $('#sheet'), h = $('#handle'); let y0 = 0, base = 0, moved = false;
     const vh = () => window.innerHeight;
-    const pos = { peek: () => vh() * .86 - 128, half: () => vh() * .86 - vh() * .52, full: () => 0 };
+    const pos = { peek: () => vh() * .85 - 120, half: () => vh() * .85 - vh() * .45, full: () => 0 };
     h.addEventListener('pointerdown', (e) => { h.setPointerCapture(e.pointerId); y0 = e.clientY; base = pos[S.sheetSnap || 'peek'](); sheet.classList.add('dragging'); moved = false; });
     h.addEventListener('pointermove', (e) => { if (!sheet.classList.contains('dragging')) return; moved = true; const y = Math.max(0, Math.min(pos.peek(), base + e.clientY - y0)); sheet.style.transform = `translateY(${y}px)`; });
     const end = (e) => {
@@ -613,7 +663,7 @@ window.BUILTIN_DUBAI_DB = {"meta":{"name":"Dubai Streets Guide road database","v
     S.api.all.filter((i) => i.lanes).forEach((i) => {
       const d = API.distanceKm(me.lat, me.lng, i.lat, i.lng) * 1000;
       if (d < 800 && !S.announced.has(i.id)) {
-        S.announced.add(i.id); select(i.id); const ls = API.laneState(i.lanes, 0);
+        S.announced.add(i.id); select(i.id); showJunction(true); const ls = API.laneState(i.lanes, 0);
         speak(`In ${Math.round(d / 100) * 100} metres, ${i.exit ? 'exit ' + i.exit + ', ' : ''}${i.name}. Keep ${ls.keep.toLowerCase()}.`);
       } else if (d > 1500) S.announced.delete(i.id);
     });
@@ -630,12 +680,14 @@ window.BUILTIN_DUBAI_DB = {"meta":{"name":"Dubai Streets Guide road database","v
       stopSim(); const r = S.api.db.routes[+pick.value]; let i = 0; $('#m-route').classList.add('hidden'); snap('peek');
       const poly = L.polyline(r.steps.map((s) => [s.lat, s.lng]), { color: '#fbbf24', weight: 6, opacity: .8 }).addTo(S.map); S.map.fitBounds(poly.getBounds(), { padding: [40, 40] });
       S.sim = { poly, marker: L.marker([r.steps[0].lat, r.steps[0].lng], { icon: icon('<div class="me"></div>'), interactive: false }).addTo(S.map) };
+      $('#turns').innerHTML = r.steps.map((s, k) => `<li data-k="${k}">${esc(s.text)}</li>`).join(''); $('#turns-blk').classList.remove('hidden');
       const step = () => {
         if (i >= r.steps.length) { stopSim(true); return; }
         const s = r.steps[i++]; S.sim.marker.setLatLng([s.lat, s.lng]); S.map.panTo([s.lat, s.lng]);
         if (s.item) { S.sel = S.api.getItem(s.item); S.destIdx = s.dest || 0; if (S.sel) updateGantry(S.sel); }
         alertBar(s.text, true); speak(s.text);
         $$('#route-steps li').forEach((li) => li.classList.toggle('cur', +li.dataset.i === i - 1));
+        $$('#turns li').forEach((li) => li.classList.toggle('cur', +li.dataset.k === i - 1));
       };
       step(); S.simTimer = setInterval(step, 6500);
     };
@@ -676,5 +728,5 @@ window.BUILTIN_DUBAI_DB = {"meta":{"name":"Dubai Streets Guide road database","v
     };
   }
 
-  boot();
+  ready(boot);
 })();

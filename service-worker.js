@@ -2,8 +2,8 @@
    Never touches cross-origin requests (map tiles, Leaflet CDN, fonts), so it cannot blank the map. */
 try { importScripts('./config/app.config.js', './api/roads-api.js'); } catch (e) { /* flat upload: offline API routes disabled */ }
 
-const VERSION = 'dubai-guide-v2';
-const PRECACHE = ['./', './index.html', './style.css', './script.js', './manifest.json', './offline.html', './favicon.ico', './icon-192.png', './icon-512.png', './dubai-roads.json', './database/dubai-roads.json'];
+const VERSION = 'dubai-streets-v3';   // keep in sync with CACHE in index.html
+const PRECACHE = ['./', './index.html', './style.css', './script.js', './manifest.json', './offline.html', './favicon.ico', './icon-192.png', './icon-512.png', './og-image.png', './dubai-roads.json', './database/dubai-roads.json'];
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();
