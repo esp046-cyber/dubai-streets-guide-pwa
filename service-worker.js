@@ -1,32 +1,23 @@
-/* Offline-first service worker */
-importScripts('config/app.config.js', 'api/roads-api.js');
+/* Offline fallback service worker — GitHub Pages sub-path safe (relative paths only).
+   Never touches cross-origin requests (map tiles, Leaflet CDN, fonts), so it cannot blank the map. */
+try { importScripts('./config/app.config.js', './api/roads-api.js'); } catch (e) { /* flat upload: offline API routes disabled */ }
 
-const VERSION = 'dsg-v1.0.0';
-const CORE = `${VERSION}-core`, TILES = `${VERSION}-tiles`, TILE_MAX = 400;
-const PRECACHE = [
-  './', 'index.html', 'style.css', 'script.js', 'manifest.json', 'offline.html',
-  'favicon.ico', 'icon-192.png', 'icon-512.png', 'browserconfig.xml',
-  'config/app.config.js', 'api/roads-api.js', 'api/github-pusher.js', 'database/dubai-roads.json',
-  'assets/og-image.png', 'assets/gas.svg', 'assets/uturn.svg', 'assets/highway.svg', 'assets/lane-left.svg', 'assets/lane-right.svg',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
-];
+const VERSION = 'dubai-guide-v2';
+const PRECACHE = ['./', './index.html', './style.css', './script.js', './manifest.json', './offline.html', './favicon.ico', './icon-192.png', './icon-512.png', './dubai-roads.json', './database/dubai-roads.json'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CORE).then((c) => Promise.all(PRECACHE.map((u) => c.add(u).catch(() => null)))).then(() => self.skipWaiting()));
+  self.skipWaiting();
+  e.waitUntil(caches.open(VERSION).then((c) => Promise.all(PRECACHE.map((u) => c.add(new Request(u, { cache: 'reload' })).catch(() => null)))));
 });
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== VERSION).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
-async function trim(name, max) {
-  const c = await caches.open(name), keys = await c.keys();
-  for (let i = 0; i < keys.length - max; i++) await c.delete(keys[i]);
-}
-
-// Offline REST-like routes: /api/highways, /api/gas?lat=&lng=, /api/uturns?zone=, /api/lanes?id=&dest=
+// Offline REST-like routes (/api/highways, /api/gas, /api/uturns, /api/lanes) when the API helper is present.
 async function handleApi(url) {
-  const dbRes = await (await caches.open(CORE)).match('database/dubai-roads.json') || await fetch('database/dubai-roads.json');
-  const api = RoadsAPI.create(await dbRes.json());
+  const cache = await caches.open(VERSION);
+  const dbRes = (await cache.match('./database/dubai-roads.json')) || (await cache.match('./dubai-roads.json')) || (await fetch('./dubai-roads.json'));
+  const api = self.RoadsAPI.create(await dbRes.json());
   const p = url.searchParams, path = url.pathname.split('/api/')[1];
   let body;
   if (path === 'highways') body = api.getHighways();
@@ -38,27 +29,12 @@ async function handleApi(url) {
 }
 
 self.addEventListener('fetch', (e) => {
-  const req = e.request;
-  if (req.method !== 'GET') return;
-  const url = new URL(req.url);
-  if (url.origin === location.origin && url.pathname.includes('/api/') && !url.pathname.endsWith('.js')) { e.respondWith(handleApi(url)); return; }
-  if (/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/.test(url.hostname)) {
-    e.respondWith(caches.open(TILES).then(async (c) => {
-      const hit = await c.match(req); if (hit) return hit;
-      try { const r = await fetch(req); if (r.ok || r.type === 'opaque') { c.put(req, r.clone()); trim(TILES, TILE_MAX); } return r; }
-      catch (err) { return new Response('', { status: 504 }); }
-    }));
-    return;
-  }
-  if (req.mode === 'navigate') {
-    e.respondWith(fetch(req).then((r) => { const copy = r.clone(); caches.open(CORE).then((c) => c.put(req, copy)); return r; })
-      .catch(() => caches.match(req).then((r) => r || caches.match('index.html')).then((r) => r || caches.match('offline.html'))));
-    return;
-  }
-  // stale-while-revalidate for everything else
-  e.respondWith(caches.open(CORE).then(async (c) => {
-    const hit = await c.match(req);
-    const net = fetch(req).then((r) => { if (r.ok) c.put(req, r.clone()); return r; }).catch(() => hit || caches.match('offline.html'));
-    return hit || net;
-  }));
+  const req = e.request, url = new URL(req.url);
+  if (req.method !== 'GET' || url.origin !== self.location.origin) return;   // bypass tiles, CDNs, fonts
+  if (self.RoadsAPI && url.pathname.includes('/api/') && !url.pathname.endsWith('.js')) { e.respondWith(handleApi(url)); return; }
+  // Network first (always fresh), cache as offline fallback.
+  e.respondWith(fetch(req).then((r) => {
+    if (r.ok) { const copy = r.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); }
+    return r;
+  }).catch(() => caches.match(req).then((hit) => hit || (req.mode === 'navigate' ? caches.match('./index.html').then((h) => h || caches.match('./offline.html')) : Response.error()))));
 });

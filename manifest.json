@@ -2,7 +2,7 @@
   "name": "Dubai Streets Guide PRO — Jebel Ali & Greater Dubai",
   "short_name": "Dubai Streets",
   "description": "Highway exits, left/right lane guidance, U-turns, fuel and JAFZA gates for Jebel Ali and Greater Dubai.",
-  "id": "./",
+  "id": "./index.html",
   "start_url": "./index.html?source=pwa",
   "scope": "./",
   "display": "standalone",

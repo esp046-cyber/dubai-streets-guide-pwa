@@ -16,6 +16,9 @@ Stack: vanilla HTML/CSS/ES6 + Leaflet + OpenStreetMap/CARTO tiles. **No build st
 - Dual-ring speed + radar widget, Abu Dhabi border warning, voice guidance, route simulator
 - Night/Day theme, 3D tilt, offline mode, Add to Home Screen, deep links to Google Maps, Waze, Apple Maps, RTA
 
+## Flat upload (fixes "Database not reachable")
+iPhone Safari cannot upload folders to GitHub. `script.js` now bundles the config, API and the full database, so the app runs with **only these 10 root files** uploaded (replace the old ones): `index.html`, `style.css`, `script.js`, `service-worker.js`, `manifest.json`, `offline.html`, `dubai-roads.json`, `favicon.ico`, `icon-192.png`, `icon-512.png`. The `config/`, `api/`, `database/` folders are optional sources. After uploading, open the site in a new Private tab once so the old service worker is replaced.
+
 ## Deploy from an iPhone only (no Codespaces, no PC)
 
 ### A. One-tap uploader (recommended)
