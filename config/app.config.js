@@ -5,9 +5,11 @@
     version: '1.0.0',
     center: [25.0069, 55.0867], // Jebel Ali
     zoom: { default: 12, city: 11, street: 15, detail: 17 },
+    // Keyless CARTO Voyager raster tiles (no API key, no watermark). Night mode inverts them with a CSS filter (.tiles-night).
     tiles: {
-      day: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap contributors' },
-      night: { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attr: '&copy; OpenStreetMap, &copy; CARTO' }
+      day:   { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', attr: '&copy; OpenStreetMap contributors &copy; CARTO' },
+      night: { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', attr: '&copy; OpenStreetMap contributors &copy; CARTO', cls: 'tiles-night' },
+      fallback: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap contributors' }
     },
     // Dubai radar: widely reported ~20 km/h flash tolerance. Informational only: the posted limit is the law.
     radarBuffer: { dubai: 20, abuDhabi: 0, note: 'Informational only. The posted limit is the legal limit.' },
@@ -36,7 +38,7 @@
     gantry: { green: '#006B3F', blue: '#00529B' },
     // Files the in-app GitHub pusher uploads (paths relative to the site root)
     projectFiles: [
-      'index.html', 'style.css', 'dubai-roads.json', 'script.js', 'manifest.json', 'service-worker.js', 'offline.html',
+      'index.html', 'style.css', 'dubai-roads.json', 'og-image.png', 'screenshot-map.png', 'screenshot-lanes.png', 'script.js', 'manifest.json', 'service-worker.js', 'offline.html',
       'favicon.ico', 'icon-192.png', 'icon-512.png', 'README.md', '.gitignore', 'package.json',
       '.env.example', 'LICENSE', 'robots.txt', 'sitemap.xml', 'browserconfig.xml',
       'assets/og-image.png', 'assets/gas.svg', 'assets/uturn.svg', 'assets/highway.svg', 'assets/lane-left.svg', 'assets/lane-right.svg',
