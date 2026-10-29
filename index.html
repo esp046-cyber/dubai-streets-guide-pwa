@@ -33,13 +33,13 @@
   <!-- Top RTA gantry HUD -->
   <header id="hud-top">
     <div id="gantry" class="gantry green" aria-live="polite">
-      <div class="g-exit"><small>EXIT</small><b id="g-exit-no">—</b></div>
+      <div class="g-exit"><small id="g-exit-lbl">EXIT</small><b id="g-exit-no">—</b></div>
       <div class="g-names">
         <div id="g-en">Tap any marker</div>
         <div id="g-ar" dir="rtl">اختر علامة على الخريطة</div>
       </div>
       <div class="g-right">
-        <div id="g-arrows" class="g-arrows">↑ ↑ ↑ ↑</div>
+        <div id="g-arrows" class="g-arrows">↑ ↑ ↑ ↱</div>
         <div id="g-dist">—</div>
       </div>
       <div id="g-keep" class="g-keep hidden">KEEP RIGHT</div>
@@ -57,6 +57,8 @@
     <button class="pill" data-f="jafza">🏗️ Jebel Ali / JAFZA</button>
     <button class="pill" data-f="salik">🚧 Salik Gates</button>
   </nav>
+
+  <div id="fuel-ticker" class="hidden" aria-label="UAE fuel prices per litre"></div>
 
   <div id="map-wrap"><div id="map"></div></div>
 
@@ -108,8 +110,7 @@
       <div id="card" class="card hidden"></div>
 
       <div id="fuel-bar" class="blk hidden">
-        <h3>UAE fuel prices <small id="fuel-asof"></small></h3>
-        <div id="fuel-prices" class="prices"></div>
+        <h3>Station filters</h3>
         <div id="fuel-toggles" class="chips">
           <button data-t="ev">⚡ EV Green Charger</button>
           <button data-t="truck">🚛 Heavy Truck Diesel</button>
@@ -120,7 +121,7 @@
 
       <div id="turns-blk" class="blk hidden"><h3>Turn list</h3><ol id="turns" class="turns"></ol></div>
       <div class="blk"><h3>Nearby</h3><div id="list" class="list"></div></div>
-      <div class="blk"><h3>Salik tariff <small>Dubai time</small></h3><table id="salik-tbl" class="tbl"></table></div>
+      <div class="blk"><h3>Salik tariff <small>Dubai time</small></h3><div id="salik-tbl" class="salik-card"></div></div>
       <p class="disclaimer">Positions, lanes and exit numbers are a driving aid, not an official source. Always follow road signs and RTA instructions. See docs/JEBEL_ALI_ROAD_MANUAL.md.</p>
     </div>
   </section>
