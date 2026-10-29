@@ -36,7 +36,7 @@
     gantry: { green: '#006B3F', blue: '#00529B' },
     // Files the in-app GitHub pusher uploads (paths relative to the site root)
     projectFiles: [
-      'index.html', 'style.css', 'script.js', 'manifest.json', 'service-worker.js', 'offline.html',
+      'index.html', 'style.css', 'dubai-roads.json', 'script.js', 'manifest.json', 'service-worker.js', 'offline.html',
       'favicon.ico', 'icon-192.png', 'icon-512.png', 'README.md', '.gitignore', 'package.json',
       '.env.example', 'LICENSE', 'robots.txt', 'sitemap.xml', 'browserconfig.xml',
       'assets/og-image.png', 'assets/gas.svg', 'assets/uturn.svg', 'assets/highway.svg', 'assets/lane-left.svg', 'assets/lane-right.svg',
